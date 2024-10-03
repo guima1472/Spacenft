@@ -1,0 +1,279 @@
+class Example extends Phaser.Scene
+{
+    constructor ()
+    {
+        super();
+    }
+
+    preload ()
+    {
+        this.load.image('sky', `https://play.rosebud.ai/assets/sky.png?8GMH`);
+        this.load.image('red', `https://play.rosebud.ai/assets/red.png?O20H`);
+        this.load.image('spaceShip', `https://play.rosebud.ai/assets/space ship flying right.png?mVqC`);
+        this.load.image('bullet', `https://play.rosebud.ai/assets/bright green oval laser pulse.png?JjsS`); 
+        this.load.image('alienShip', `https://play.rosebud.ai/assets/green alien ship side view facing left.png?pGHJ`); 
+        this.load.image('bomb', `https://play.rosebud.ai/assets/space bomb that aliens drop.png?t0Ov`); 
+    }
+
+    create ()
+    {
+        this.isGameOver = false; 
+
+        this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'sky');
+        this.background.setOrigin(0);
+
+        const particles = this.add.particles('red');
+        particles.setDepth(1);
+
+        this.spaceShip = this.physics.add.image(400, 100, 'spaceShip');
+        this.spaceShip.setVelocity(0, 0);
+        this.spaceShip.setBounce(0, 0);
+        this.spaceShip.setCollideWorldBounds(true);
+        this.spaceShip.setScale(0.2);
+        this.spaceShip.body.setGravityY(0);
+        this.spaceShip.setDrag(400);
+
+        this.bullets = this.physics.add.group(); 
+        this.alienShips = this.physics.add.group(); 
+        this.bombs = this.physics.add.group(); 
+
+        this.emitter = particles.createEmitter({
+            speed: -100,
+            angle: { min: 170, max: 190 }, 
+            scale: { start: 0.25, end: 0 }, 
+            alpha: 0.5, 
+            lifespan: 200, 
+            blendMode: 'ADD'
+        });
+
+        this.emitter.startFollow(this.spaceShip);
+        this.emitter.followOffset.set(-20, 7);
+
+        this.cursors = this.input.keyboard.createCursorKeys();
+
+        this.timeRemaining = 60; 
+        this.timeText = this.add.text(16, 16, 'Time: 60', { fontSize: '32px', fill: '#ffffff' });
+
+        // Add the control instruction text
+        this.controlText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Use cursor keys to control the ship', { fontSize: '32px', fill: '#ffffff' });
+        this.controlText.setOrigin(0.5);
+
+        // Hide the control instruction text after 3 seconds
+        this.time.delayedCall(3000, function() {
+            this.controlText.setVisible(false);
+        }, [], this);
+
+        this.time.addEvent({
+            delay: 1000,
+            callback: this.updateTime,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.time.addEvent({
+            delay: 3000,
+            callback: this.createAlienShip,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.time.addEvent({
+            delay: 700,
+            callback: this.fireBullet,
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    updateTime() {
+        this.timeRemaining--; 
+        this.timeText.setText('Time: ' + this.timeRemaining);
+
+        if(this.timeRemaining <= 0 && !this.isGameOver) {
+            this.endGame();
+        }
+    }
+
+    createAlienShip() {
+        let yPosition = Phaser.Math.Between(10, this.scale.height - 100);
+        let alienShip = this.alienShips.create(this.scale.width, yPosition, 'alienShip');
+        alienShip.setScale(0.2).setDepth(2);
+        alienShip.setVelocity(-50, 0);
+        alienShip.hitsTaken = 0;
+
+        let targetX = Phaser.Math.Between(this.scale.width / 3, this.scale.width * 2 / 3);
+        this.tweens.add({
+            targets: alienShip,
+            x: targetX,
+            ease: "Linear",
+            duration: 3000, 
+            repeat: 0,
+            yoyo: false,
+            onComplete: function(tween, targets){
+                this.tweens.add({
+                    targets: alienShip,
+                    y: 10,
+                    ease: "Sine.easeInOut",
+                    duration: 5000,
+                    repeat: -1,
+                    yoyo: true
+                });
+            }.bind(this),
+            delay: 3000 
+        });
+
+        this.time.addEvent({
+            delay: 2000,
+            callback: function() {
+                if (alienShip.active) {
+                    let bomb = this.bombs.create(alienShip.x, alienShip.y, 'bomb');
+                    bomb.setVelocity(-50, 100).setScale(0.08).setAngle(180); 
+                }
+            },
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    fireBullet() {
+        if(this.isGameOver) 
+            return;
+        let bullet = this.bullets.create(this.spaceShip.x + this.spaceShip.displayWidth/2, this.spaceShip.y + this.spaceShip.displayHeight / 5, 'bullet'); 
+        bullet.setScale(0.05);
+        bullet.setVelocity(500, 0);
+        bullet.angle += 90;
+    }
+
+    endGame() {
+        if(this.isGameOver) 
+            return;
+
+        this.isGameOver = true; 
+
+        let endText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'You did it!', { fontSize: '64px', fill: '#ffffff' });
+        endText.setOrigin(0.5);
+        endText.setY(-endText.displayHeight);
+        this.spaceShip.disableBody(true, true);
+        this.timeText.setVisible(false);
+        this.emitter.setVisible(false);
+
+        let tween = this.tweens.add({
+            targets: endText,
+            y: this.scale.height / 2,
+            ease: 'Bounce',
+            duration: 2000,
+            yoyo: false,
+            repeat: 0
+        });
+
+        tween.on('complete', function() {
+            this.time.delayedCall(2000, function() {
+                this.cameras.main.fade(500);
+                this.time.delayedCall(500, function() {
+                    this.scene.restart();
+                }, [], this);
+            }, [], this);
+        }, this);
+    }
+
+    update ()
+    {
+        this.background.tilePositionX += 0.5;
+
+        this.physics.overlap(this.spaceShip, this.alienShips, this.onCollision, null, this);
+        this.physics.overlap(this.spaceShip, this.bombs, this.onCollision, null, this);
+        this.physics.overlap(this.bullets, this.alienShips, this.bulletHitAlienShip, null, this);
+
+        if (this.spaceShip.active) {
+            if (this.spaceShip.body.velocity.x < 0) {
+                this.emitter.setSpeed(-400);
+            } else {
+                this.emitter.setSpeed(-200);
+            }
+        }
+
+        if (this.cursors.up.isDown)
+        {
+            this.spaceShip.setVelocityY(-200);
+        }
+        else if (this.cursors.down.isDown)
+        {
+            this.spaceShip.setVelocityY(200);
+        }
+
+        if (this.cursors.right.isDown)
+        {
+            this.spaceShip.setVelocityX(200);
+        }
+        else if (this.cursors.left.isDown)
+        {
+            this.spaceShip.setVelocityX(-200);
+        }
+
+        this.bullets.children.each(function(bullet) {
+            if (bullet.x > this.scale.width) {
+                bullet.destroy();
+            }
+        }, this);
+        
+        this.alienShips.children.each(function(alienShip) {
+            if (alienShip.x < 30) {
+                alienShip.destroy();
+            }
+        }, this);
+        
+        this.bombs.children.each(function(bomb) {
+            if (bomb.y > this.scale.height-20) {
+                bomb.destroy();
+            }
+        }, this);
+    }
+
+    bulletHitAlienShip(bullet, alienShip) {
+        bullet.setX(-100);
+        bullet.destroy();
+        alienShip.hitsTaken += 1; 
+        alienShip.setTintFill(0xffffff);
+        this.time.delayedCall(100, function() {
+            alienShip.clearTint();
+        }, [], this);
+
+        if (alienShip.hitsTaken >= 5) {
+            alienShip.destroy();
+        }
+    }
+
+    onCollision(spaceShip, object) {
+        this.emitter.setVisible(false);
+        this.timeText.setVisible(false);
+        spaceShip.setCollideWorldBounds(false);
+        spaceShip.setVisible(false).setX(10000);
+        if (!this.isGameOver) {
+            this.time.delayedCall(2000, function() {
+                this.cameras.main.fade(500);
+                this.time.delayedCall(500, function() {
+                    this.scene.restart();
+                }, [], this);
+            }, [], this);
+            this.isGameOver = true;
+        }
+    }
+}
+
+const container = document.getElementById('renderDiv');
+const config = {
+    type: Phaser.AUTO,
+    parent: 'renderDiv',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    width: 800,
+    height: 600,
+    physics: {
+        default: 'arcade',
+    },
+    scene: Example
+};
+
+window.phaserGame = new Phaser.Game(config);
